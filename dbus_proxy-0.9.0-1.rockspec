@@ -1,16 +1,16 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "dbus_proxy"
-version = "0.8.5-1"
+version = "0.9.0-1"
 -- LuaDist source
 source = {
-  tag = "0.8.5-1",
+  tag = "0.9.0-1",
   url = "git://github.com/LuaDist-testing/dbus_proxy.git"
 }
 -- Original source
 -- source = {
 --    url = "git://github.com/stefano-m/lua-dbus_proxy",
---    tag = "v0.8.5"
+--    tag = "v0.9.0"
 -- }
 description = {
    summary = "Simple API around GLib's GIO:GDBusProxy built on top of lgi",
