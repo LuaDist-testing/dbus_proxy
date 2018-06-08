@@ -23,6 +23,7 @@
   @module dbus_proxy
 ]]
 
+local string = string
 
 local lgi = require("lgi")
 
@@ -50,6 +51,16 @@ proxying for more information.
 When a property in a DBus object
 changes, the same change is reflected in the proxy.  Similarly, when a signal
 is emitted, the proxy object is notified accordingly.
+
+Additionally, the following fields reflect the corresponding [`g-*`
+properties](https://developer.gnome.org/gio/2.50/GDBusProxy.html#GDBusProxy.properties):
+
+- `connection`: g-connection
+- `flags`: g-flags
+- `interface`: g-interface-name
+- `name`: g-name
+- `name_owner`: g-name-owner
+- `object_path`: g-object-path
 
 For all this to work though, the code must run
 inside
@@ -88,7 +99,6 @@ can be achieved in two ways:
             print("something changed here too!")
           end
 
-
 @type Proxy
 @usage
 p = require("dbus_proxy")
@@ -104,7 +114,8 @@ proxy:SomeMethod()
 proxy:SomeMethodWithArguments("hello", 123)
 proxy.SomeProperty
 ]]
-local Proxy = {}
+local Proxy = {
+}
 
 --- Build a lgi.GLib.Variant tuple that can be used to call a method
 -- @param args[type=table] an array of tables that have the `type` and `value` fields.
@@ -169,10 +180,11 @@ end
 --- Set a cached property of a proxy object
 -- @param[type=Proxy] proxy a proxy object
 -- @param[type=string] name the name of the property
--- @param[type=any] value the value to be set
--- @param[type=string] signature the GDBus signature of the value (e.g. `"s"` for "string" or `"ai"` for "array of integers")
-local function set_property(proxy, name, value, signature)
-  local variant_value = GVariant(signature, value)
+-- @param[type=table] opts containing the following attributes: <br>
+-- -  `value` the value to be set <br>
+-- -  `signature` the DBus signature as a string
+local function set_property(proxy, name, opts)
+  local variant_value = GVariant(opts.signature, opts.value)
   proxy._proxy:set_cached_property(name, variant_value)
 end
 
@@ -238,8 +250,8 @@ local function generate_accessor(property)
   end
 
   if property.flags.WRITABLE then
-    accessor.setter = function (proxy, value)
-      set_property(proxy, value, property.name)
+    accessor.setter = function (proxy, opts)
+      set_property(proxy, property.name, opts)
     end
   else
     accessor.setter =  function ()
@@ -260,13 +272,30 @@ end
 -- @param[type=Proxy] proxy a proxy object
 local function generate_fields(proxy)
   local xml_data_str = introspect(proxy)
+
+  if not xml_data_str then
+    error(
+      string.format(
+        "Failed to introspect object '%s', XML data was %s",
+        proxy.name, xml_data_str
+      )
+    )
+  end
+
   local node = DBusNodeInfo.new_for_xml(xml_data_str)
 
   -- NOTE: does not take into account nested nodes.
   for _, iface in ipairs(node.interfaces) do
 
     for _, method in ipairs(iface.methods) do
-      proxy[method.name] = generate_method(iface.name, method)
+      if not proxy[method.name] then
+        proxy[method.name] = generate_method(iface.name, method)
+      else
+        -- override only if the interface name is the same as the proxy's
+        if iface.name == proxy.interface then
+          proxy[method.name] = generate_method(iface.name, method)
+        end
+      end
     end
 
     for _, signal in ipairs(iface.signals) do
@@ -418,12 +447,12 @@ function Proxy:new(opts)
   o.signals = {}
   o._proxy = proxy
   -- g-* properties
-  o.connection = proxy["g-connection"]
-  o.flags = proxy["g-flags"]
-  o.interface = proxy["g-interface-name"]
-  o.name = proxy["g-name"]
-  o.name_owner = proxy["g-name-owner"]
-  o.object_path = proxy["g-object-path"]
+  o.connection = proxy.g_connection
+  o.flags = proxy.g_flags
+  o.interface = proxy.g_interface_name
+  o.name = proxy.g_name
+  o.name_owner = proxy.g_name_owner
+  o.object_path = proxy.g_object_path
 
   setmetatable(o, meta)
   self.__index = self
