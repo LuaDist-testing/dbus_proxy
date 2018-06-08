@@ -10,6 +10,7 @@ local p = require("dbus_proxy")
 local Bus = p.Bus
 local Proxy = p.Proxy
 local variant = p.variant
+local monitored = p.monitored
 
 b.describe("The Bus table", function ()
              b.it("does not allow to set values", function ()
@@ -226,24 +227,29 @@ b.describe("DBus Proxy objects", function ()
              b.it("can access properties", function ()
                     -- This is a bit hacky, but I don't
                     -- know how to make it better.
-                    local device = Proxy:new(
-                      {
-                        bus = Bus.SYSTEM,
-                        name = "org.freedesktop.UPower",
-                        interface = "org.freedesktop.UPower.Device",
-                        path =
-                          "/org/freedesktop/UPower/devices/battery_BAT0"
-                      }
-                    )
+                    local inside_ci = os.getenv("CI")
+                    if inside_ci == "true" then
+                      print("Inside CI: Skipping test that requires UPower")
+                    else
 
-                    assert.is_number(device.Percentage)
-                    assert.is_true(device.IsPresent)
-                    assert.is_string(device.Model)
+                      local device = Proxy:new(
+                        {
+                          bus = Bus.SYSTEM,
+                          name = "org.freedesktop.UPower",
+                          interface = "org.freedesktop.UPower.Device",
+                          path =
+                            "/org/freedesktop/UPower/devices/battery_BAT0"
+                        }
+                      )
 
-                    assert.has_error(
-                      function () device.Percentage = 1 end,
-                      "Property 'Percentage' is not writable")
+                      assert.is_number(device.Percentage)
+                      assert.is_true(device.IsPresent)
+                      assert.is_string(device.Model)
 
+                      assert.has_error(
+                        function () device.Percentage = 1 end,
+                        "Property 'Percentage' is not writable")
+                    end
              end)
 
              b.it("can handle signals", function ()
@@ -313,5 +319,111 @@ b.describe("DBus Proxy objects", function ()
                       end,
                       "Invalid signal: NotValid")
 
+             end)
+end)
+
+b.describe("Monitored proxy objects", function ()
+             local ctx = GLib.MainLoop():get_context()
+
+             local dbus = Proxy:new(
+               {
+                 bus = Bus.SESSION,
+                 name = "org.freedesktop.DBus",
+                 path= "/org/freedesktop/DBus",
+                 interface = "org.freedesktop.DBus"
+               }
+             )
+
+             b.it("can validate the options", function ()
+
+                    local options = { "bus", "name", "interface", "path" }
+
+                    local correct_options = {
+                      bus = Bus.SESSION,
+                      name = "com.example.Test2",
+                      path = "/com/example/Test2",
+                      interface = "com.example.Test2"
+                    }
+
+                    for _, option in ipairs(options) do
+                      local opts = {}
+                      for k, v in pairs(correct_options) do
+                        if k ~= option then
+                          opts[k] = v
+                        end
+                        assert.has_error(function ()
+                            local _ = monitored.new(opts)
+                        end)
+                      end
+                    end
+
+             end)
+
+             b.it("can be disconnected", function ()
+
+                    local name = "com.example.Test3"
+
+                    local opts = {
+                      bus = Bus.SESSION,
+                      name = name,
+                      interface = name,
+                      path = "/com/example/Test3"
+                    }
+
+                    local DBUS_NAME_FLAG_REPLACE_EXISTING = 2
+                    assert.equals(
+                      1,
+                      dbus:RequestName(name,
+                                       DBUS_NAME_FLAG_REPLACE_EXISTING)
+                    )
+
+                    assert.is_true(ctx:iteration(true))
+
+                    assert.equals(
+                      1,
+                      dbus:ReleaseName(name)
+                    )
+
+                    assert.is_true(ctx:iteration(true))
+
+                    local proxy = monitored.new(opts)
+
+                    assert.is_true(ctx:iteration(true))
+
+                    assert.is_false(proxy.is_connected)
+
+                    assert.has_error(
+                      function ()
+                        local _ = proxy.Metadata
+                      end,
+                      name .. " disconnected")
+             end)
+
+             b.it("can be connected", function ()
+
+                    local bus_name = "com.example.Test4"
+
+                    local opts = {
+                      bus = Bus.SESSION,
+                      name = bus_name,
+                      interface = bus_name,
+                      path = "/com/example/Test4",
+                    }
+
+                    -- See dbus-shared.h
+                    local DBUS_NAME_FLAG_REPLACE_EXISTING = 2
+                    assert.equals(
+                      1,
+                      dbus:RequestName(bus_name,
+                                       DBUS_NAME_FLAG_REPLACE_EXISTING)
+                    )
+
+                    assert.is_true(ctx:iteration(true))
+
+                    local proxy = monitored.new(opts)
+
+                    assert.is_true(ctx:iteration(true))
+
+                    assert.is_true(proxy.is_connected)
              end)
 end)

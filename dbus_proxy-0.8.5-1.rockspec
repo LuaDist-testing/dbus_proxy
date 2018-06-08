@@ -1,9 +1,17 @@
+-- This file was automatically generated for the LuaDist project.
+
 package = "dbus_proxy"
-version = "0.8.1-1"
+version = "0.8.5-1"
+-- LuaDist source
 source = {
-   url = "git://github.com/stefano-m/lua-dbus_proxy",
-   tag = "v0.8.1"
+  tag = "0.8.5-1",
+  url = "git://github.com/LuaDist-testing/dbus_proxy.git"
 }
+-- Original source
+-- source = {
+--    url = "git://github.com/stefano-m/lua-dbus_proxy",
+--    tag = "v0.8.5"
+-- }
 description = {
    summary = "Simple API around GLib's GIO:GDBusProxy built on top of lgi",
    detailed = "Simple API around GLib's GIO:GDBusProxy built on top of lgi",
@@ -21,6 +29,8 @@ build = {
    type = "builtin",
    modules = {
       ["dbus_proxy._bus"] = "src/dbus_proxy/_bus.lua",
+      ["dbus_proxy._monitored"] = "src/dbus_proxy/_monitored.lua",
+      ["dbus_proxy._proxy"] = "src/dbus_proxy/_proxy.lua",
       ["dbus_proxy._variant"] = "src/dbus_proxy/_variant.lua",
       ["dbus_proxy.init"] = "src/dbus_proxy/init.lua"
    },
