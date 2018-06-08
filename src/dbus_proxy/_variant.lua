@@ -15,7 +15,6 @@
 ]]
 
 ---  @submodule dbus_proxy
-
 local VariantType = require("lgi").GLib.VariantType
 
 local variant = {}
@@ -54,29 +53,34 @@ stripped3 = variant.strip(v3)
 -- {{1, 2, 3}, {4, 1, 2, 3}, n=2}
 ]]
 function variant.strip(v)
-  if type(v) ~= "userdata" then
-    -- FIXME: Won't work if there's userdata inside a variant
+
+  if not tostring(v):find("GLib%.Variant$") then
+    if type(v) == "table" and #v > 0 then
+      -- Strip the 'n' field from pure arrays.
+      -- This is found in nested tuples.
+      v.n = nil
+    end
     return v
   end
 
-  if v:is_of_type(VariantType.DICTIONARY) then
+  if v:is_container() and not v:is_of_type(VariantType.VARIANT) then
     local out = {}
-    for key, val in v:pairs() do
-      out[key] = variant.strip(val)
-    end
-    return out
-  elseif v:is_of_type(VariantType.TUPLE)
-      or v:is_of_type(VariantType.ARRAY) then
-    local out = {}
-    for idx, val in v:ipairs() do
-      if type(val) == "table" then
-        -- This is hacky, but nested tuples don't
-        -- carry their type, so I have to manually
-        -- strip the 'n'
-        val.n = nil
+    local n_children = v:n_children()
+    local idx = 0
+
+    local is_dict = v:is_of_type(VariantType.DICTIONARY)
+    while idx < n_children do
+      local val = v:get_child_value(idx)
+      idx = idx + 1
+      if is_dict then
+        local key = val[1]
+        local value = variant.strip(val[2])
+        out[key] = variant.strip(value)
+      else
+        out[idx] = variant.strip(val)
       end
-      out[idx] = variant.strip(val)
     end
+
     return out
   else
     return variant.strip(v.value)
